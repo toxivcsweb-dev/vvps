@@ -1,4 +1,4 @@
-name: Remote.it SSH Setup
+name: Remote.it SSH Setup (Hardcoded Credentials)
 
 on:
   workflow_dispatch:
@@ -7,6 +7,10 @@ jobs:
   remoteit-ssh:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+
+    env:
+      REMOTEIT_EMAIL: "aapka_email@example.com"       # Yahan apna remote.it email daalein
+      REMOTEIT_PASSWORD: "aapka_password_yahan"       # Yahan apna remote.it password daalein
 
     steps:
       - name: Install prerequisites
@@ -30,9 +34,6 @@ jobs:
           remoteit --version
 
       - name: Remote.it login and device register
-        env:
-          REMOTEIT_EMAIL: ${{ secrets.REMOTEIT_EMAIL }}
-          REMOTEIT_PASSWORD: ${{ secrets.REMOTEIT_PASSWORD }}
         run: |
           remoteit login -e "$REMOTEIT_EMAIL" -p "$REMOTEIT_PASSWORD"
           DEVICE_ID=$(remoteit register-device -n "GitHub-Runner-Ubuntu-SSH" --no-wait | grep -oP '(?<=Device ID: )\S+')
