@@ -1,0 +1,51 @@
+name: Remote.it SSH Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  remoteit-ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl openssh-server
+
+      - name: Setup SSH server
+        run: |
+          sudo mkdir -p /var/run/sshd
+          echo "root:Root@12345" | sudo chpasswd
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+
+      - name: Install remote.it CLI
+        run: |
+          curl -L https://cli.remote.it/releases/latest/download/remoteit-cli-linux-amd64.tar.gz -o remoteit-cli.tar.gz
+          tar -xzf remoteit-cli.tar.gz
+          sudo mv remoteit /usr/local/bin/
+          remoteit --version
+
+      - name: Remote.it login and device register
+        env:
+          REMOTEIT_EMAIL: ${{ secrets.REMOTEIT_EMAIL }}
+          REMOTEIT_PASSWORD: ${{ secrets.REMOTEIT_PASSWORD }}
+        run: |
+          remoteit login -e "$REMOTEIT_EMAIL" -p "$REMOTEIT_PASSWORD"
+          DEVICE_ID=$(remoteit register-device -n "GitHub-Runner-Ubuntu-SSH" --no-wait | grep -oP '(?<=Device ID: )\S+')
+          echo "Device registered with ID: $DEVICE_ID"
+
+      - name: Expose SSH service through remote.it
+        run: |
+          remoteit add-service --device "$DEVICE_ID" --name "SSH" --protocol tcp --port 22 --local-port 22 --public-port 0
+          remoteit listen --device "$DEVICE_ID" --service "SSH" &
+          sleep 10
+
+      - name: Show connection info
+        run: |
+          echo "SSH is now exposed via remote.it!"
+          echo "Login as root with password Root@12345"
+          echo "Use the remote.it app or portal to get connection details."
