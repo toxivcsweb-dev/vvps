@@ -1,0 +1,48 @@
+name: Serveo SSH Tunnel Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  serveo-ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max
+
+    steps:
+      - name: Install SSH server
+        run: |
+          sudo apt update
+          sudo apt install -y openssh-server
+          sudo mkdir -p /var/run/sshd
+          sudo service ssh start
+
+      - name: Configure root SSH access with password
+        run: |
+          echo "root:Root@12345" | sudo chpasswd
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+
+      - name: Start Serveo tunnel and keep alive
+        run: |
+          # Start tunnel in background and redirect output to serveo.log
+          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -R 0:localhost:22 serveo.net > serveo.log 2>&1 &
+          sleep 15
+          echo "Tunnel started, checking logs..."
+          head -20 serveo.log
+
+      - name: Extract Serveo public SSH endpoint
+        id: get_endpoint
+        run: |
+          URL=$(grep -oE 'Forwarding TCP connections from [^ ]+' serveo.log | head -1 | awk '{print $4}')
+          echo "Serveo SSH public endpoint: $URL"
+          echo "::set-output name=url::$URL"
+
+      - name: Show SSH connection details
+        run: |
+          HOST=${{ steps.get_endpoint.outputs.url%%:* }}
+          PORT=${{ steps.get_endpoint.outputs.url##*: }}
+
+          echo "Connect with:"
+          echo "ssh root@${HOST} -p ${PORT}"
+          echo "Password: Root@12345"
