@@ -9,8 +9,8 @@ jobs:
     timeout-minutes: 360
 
     env:
-      REMOTEIT_EMAIL: "toxicvpsweb@gmail.com"       # Yahan apna remote.it email daalein
-      REMOTEIT_PASSWORD: "eT83FjV4cWaKD!5"       # Yahan apna remote.it password daalein
+      REMOTEIT_EMAIL: "aapka_email@example.com"      # Apna remote.it email yahan daalein
+      REMOTEIT_PASSWORD: "aapka_password_yahan"      # Apna remote.it password yahan daalein
 
     steps:
       - name: Install prerequisites
@@ -28,7 +28,7 @@ jobs:
 
       - name: Install remote.it CLI
         run: |
-          curl -L https://cli.remote.it/releases/latest/download/remoteit-cli-linux-amd64.tar.gz -o remoteit-cli.tar.gz
+          curl -L https://downloads.remote.it/remoteit-cli/remoteit-cli-linux-amd64.tar.gz -o remoteit-cli.tar.gz
           tar -xzf remoteit-cli.tar.gz
           sudo mv remoteit /usr/local/bin/
           remoteit --version
@@ -38,6 +38,7 @@ jobs:
           remoteit login -e "$REMOTEIT_EMAIL" -p "$REMOTEIT_PASSWORD"
           DEVICE_ID=$(remoteit register-device -n "GitHub-Runner-Ubuntu-SSH" --no-wait | grep -oP '(?<=Device ID: )\S+')
           echo "Device registered with ID: $DEVICE_ID"
+          echo "::set-output name=device_id::$DEVICE_ID"
 
       - name: Expose SSH service through remote.it
         run: |
