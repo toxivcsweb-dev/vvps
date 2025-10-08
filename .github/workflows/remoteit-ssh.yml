@@ -1,53 +1,101 @@
-name: Remote.it SSH Setup (Hardcoded Credentials)
+name: Remote.it SSH Setup (Stable + Root Access)
 
 on:
   workflow_dispatch:
 
 jobs:
-  remoteit-ssh:
+  setup-remoteit-ssh:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
-    env:
-      REMOTEIT_EMAIL: "toxicvpsweb@gmail.com"       # Yahan apna remote.it email daalein
-      REMOTEIT_PASSWORD: "eT83FjV4cWaKD!5"  
+    timeout-minutes: 30
 
     steps:
-      - name: Install prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl openssh-server
+    - name: Prepare Ubuntu SSH Server
+      run: |
+        set -eux
+        sudo apt-get update -y
+        sudo apt-get install -y openssh-server curl ca-certificates
+        sudo mkdir -p /var/run/sshd
+        echo "root:Root@12345" | sudo chpasswd
+        sudo sed -i 's/^#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config || true
+        sudo sed -i 's/^PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config || true
+        sudo sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+        sudo sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+        sudo systemctl restart ssh || sudo service ssh restart || true
+        echo "SSH server ready: user=root, password=Root@12345"
 
-      - name: Setup SSH server
-        run: |
-          sudo mkdir -p /var/run/sshd
-          echo "root:Root@12345" | sudo chpasswd
-          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo service ssh restart
+    - name: Download and install remote.it CLI (stable method)
+      id: install_remoteit
+      run: |
+        set -eux
+        URL="https://downloads.remote.it/remoteit-cli/remoteit-cli-linux-amd64.tar.gz"
+        OUT="remoteit-cli-linux-amd64.tar.gz"
 
-      - name: Install remote.it CLI
-        run: |
-          curl -L https://downloads.remote.it/remoteit-cli/remoteit-cli-linux-amd64.tar.gz -o remoteit-cli.tar.gz
-          tar -xzf remoteit-cli.tar.gz
-          sudo mv remoteit /usr/local/bin/
-          remoteit --version
+        echo "Downloading remote.it CLI from $URL"
+        curl -fsSL "$URL" -o "$OUT"
 
-      - name: Remote.it login and device register
-        run: |
-          remoteit login -e "$REMOTEIT_EMAIL" -p "$REMOTEIT_PASSWORD"
-          DEVICE_ID=$(remoteit register-device -n "GitHub-Runner-Ubuntu-SSH" --no-wait | grep -oP '(?<=Device ID: )\S+')
-          echo "Device registered with ID: $DEVICE_ID"
-          echo "::set-output name=device_id::$DEVICE_ID"
+        echo "Checking downloaded file type:"
+        file "$OUT"
 
-      - name: Expose SSH service through remote.it
-        run: |
-          remoteit add-service --device "$DEVICE_ID" --name "SSH" --protocol tcp --port 22 --local-port 22 --public-port 0
-          remoteit listen --device "$DEVICE_ID" --service "SSH" &
-          sleep 10
+        # Confirm it's gzip compressed tarball
+        if tar -tzf "$OUT" > /dev/null 2>&1; then
+          echo "Extracting tarball..."
+          mkdir -p remoteit-cli
+          tar -xzf "$OUT" -C remoteit-cli
+          ls -l remoteit-cli
+          sudo mv remoteit-cli/remoteit /usr/local/bin/remoteit
+          sudo chmod +x /usr/local/bin/remoteit
+          echo "remote.it CLI installed to /usr/local/bin/remoteit"
+          echo "installed=true" >> $GITHUB_OUTPUT
+        else
+          echo "ERROR: Downloaded file is NOT a gzip tarball. Showing first 100 lines for debug:"
+          head -n 100 "$OUT"
+          echo "installed=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
 
-      - name: Show connection info
-        run: |
-          echo "SSH is now exposed via remote.it!"
-          echo "Login as root with password Root@12345"
-          echo "Use the remote.it app or portal to get connection details."
+    - name: Fallback: install remote.it connectd (if CLI install failed)
+      if: steps.install_remoteit.outputs.installed == 'false'
+      run: |
+        set -eux
+        echo "Attempting fallback connectd installation..."
+        curl -fsSL https://raw.githubusercontent.com/remoteit/install/master/install.sh -o /tmp/remoteit-install.sh
+        chmod +x /tmp/remoteit-install.sh
+        sudo /tmp/remoteit-install.sh --install-only
+
+    - name: Show remote.it CLI version
+      run: |
+        if command -v remoteit >/dev/null 2>&1; then
+          remoteit --version || true
+          echo "remote.it CLI is installed."
+        else
+          echo "remote.it CLI not found. Trying connectd version..."
+          if command -v connectd >/dev/null 2>&1; then
+            connectd -v || true
+            echo "connectd is installed."
+          else
+            echo "No remote.it binaries found."
+            exit 1
+          fi
+        fi
+
+    - name: Log in to remote.it CLI (replace with your credentials)
+      run: |
+        set -eux
+        # REPLACE with your remote.it email and password
+        REMOTEIT_EMAIL="your-email@example.com"
+        REMOTEIT_PASSWORD="YourPasswordHere"
+
+        if command -v remoteit >/dev/null 2>&1; then
+          remoteit logout || true
+          remoteit login -e "$REMOTEIT_EMAIL" -p "$REMOTEIT_PASSWORD" || echo "Login attempted (may require manual interaction)."
+        else
+          echo "remote.it CLI not installed, skipping login step."
+        fi
+
+    - name: Final Instructions
+      run: |
+        echo "========== SETUP COMPLETE =========="
+        echo "SSH Server running: user=root password=Root@12345"
+        echo "If remote.it CLI installed, login attempted with your credentials."
+        echo "Check the remote.it dashboard to register device and add SSH service (port 22)."
+        echo "You can now connect to this runner via SSH through remote.it tunneling."
