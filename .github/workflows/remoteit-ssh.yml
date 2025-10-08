@@ -9,8 +9,8 @@ jobs:
     timeout-minutes: 360
 
     env:
-      REMOTEIT_EMAIL: "aapka_email@example.com"      # Apna remote.it email yahan daalein
-      REMOTEIT_PASSWORD: "aapka_password_yahan"      # Apna remote.it password yahan daalein
+      REMOTEIT_EMAIL: "toxicvpsweb@gmail.com"       # Yahan apna remote.it email daalein
+      REMOTEIT_PASSWORD: "eT83FjV4cWaKD!5"  
 
     steps:
       - name: Install prerequisites
