@@ -82,8 +82,8 @@ jobs:
       run: |
         set -eux
         # REPLACE with your remote.it email and password
-        REMOTEIT_EMAIL="your-email@example.com"
-        REMOTEIT_PASSWORD="YourPasswordHere"
+        REMOTEIT_EMAIL="toxicvpsweb@gmail.com"
+        REMOTEIT_PASSWORD="eT83FjV4cWaKD!5"
 
         if command -v remoteit >/dev/null 2>&1; then
           remoteit logout || true
